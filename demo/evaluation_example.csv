@@ -1,0 +1,11 @@
+candidate_id,discovery_mjd,is_supernova,shape_score,broker_anomaly_score
+demo-001,60000,false,0,0.12
+demo-002,60001,true,50,0.68
+demo-003,60002,false,0,0.91
+demo-004,60003,false,50,0.45
+demo-005,60004,true,100,0.72
+demo-006,60005,false,0,0.33
+demo-007,60006,true,100,0.84
+demo-008,60007,true,100,0.51
+demo-009,60008,false,50,0.62
+demo-010,60009,true,100,0.77
