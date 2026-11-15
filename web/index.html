@@ -1,0 +1,1200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <meta name="description" content="A transparent prototype for browsing ALeRCE transient alerts and inspecting astronomical light curves.">
+  <title>Lightcurve | ALeRCE transient dashboard prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #edf2eb;
+      --muted: #a7b2b1;
+      --surface: #172229;
+      --surface-light: #202e35;
+      --line: #33434a;
+      --lime: #c5f277;
+      --cyan: #86d9d4;
+      --amber: #f0c77b;
+      --background: #101820;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 86% 6%, rgb(134 217 212 / 10%), transparent 29rem),
+        var(--background);
+      font: 16px/1.65 var(--sans);
+    }
+
+    a { color: inherit; }
+
+    a:focus-visible, summary:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--lime);
+      outline-offset: 4px;
+    }
+
+    code, pre { font-family: var(--mono); }
+
+    code {
+      color: var(--lime);
+      font-size: .92em;
+      overflow-wrap: anywhere;
+    }
+
+    .wrap { width: min(1120px, calc(100% - 48px)); margin-inline: auto; }
+
+    #dashboard {
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      min-height: calc(100svh - 76px);
+      padding-block: 38px 62px;
+      border-top: 0;
+      background:
+        radial-gradient(ellipse at 75% 38%, rgb(35 118 130 / 17%), transparent 34rem),
+        radial-gradient(ellipse at 10% 12%, rgb(197 242 119 / 6%), transparent 26rem);
+    }
+
+    #dashboard::before {
+      position: absolute;
+      z-index: -1;
+      inset: 0;
+      background-image:
+        radial-gradient(1px 1px at 9% 22%, rgb(237 242 235 / 42%) 50%, transparent 100%),
+        radial-gradient(1px 1px at 38% 12%, rgb(134 217 212 / 50%) 50%, transparent 100%),
+        radial-gradient(1px 1px at 83% 19%, rgb(237 242 235 / 34%) 50%, transparent 100%),
+        radial-gradient(1px 1px at 65% 58%, rgb(197 242 119 / 36%) 50%, transparent 100%),
+        radial-gradient(1px 1px at 19% 73%, rgb(237 242 235 / 28%) 50%, transparent 100%);
+      background-size: 290px 240px, 360px 300px, 440px 330px, 390px 280px, 520px 360px;
+      content: "";
+      pointer-events: none;
+    }
+
+    .dashboard-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 27px;
+    }
+
+    .dashboard-heading .eyebrow { margin-bottom: 12px; }
+    .dashboard-heading h1 {
+      margin: 0;
+      font: 520 clamp(34px, 5vw, 58px)/1.02 var(--sans);
+      letter-spacing: -.055em;
+    }
+    .dashboard-heading h1 span { color: var(--cyan); }
+    .dashboard-heading > p { max-width: 430px; margin: 0 0 4px; color: var(--muted); font-size: 13px; }
+    .feed-chip {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 12px;
+      border: 1px solid rgb(134 217 212 / 28%);
+      border-radius: 4px;
+      background: rgb(134 217 212 / 5%);
+      color: var(--cyan);
+      font: 10px var(--mono);
+      letter-spacing: .1em;
+    }
+    .live-indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 12px rgb(197 242 119 / 75%);
+    }
+    .live-panel {
+      overflow: hidden;
+      padding: 0;
+      border-color: rgb(134 217 212 / 20%);
+      border-radius: 8px;
+      background: linear-gradient(155deg, rgb(15 27 34 / 96%), rgb(8 16 21 / 98%));
+      box-shadow: 0 28px 90px rgb(0 0 0 / 32%), inset 0 1px rgb(255 255 255 / 3%);
+    }
+    .live-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 13px 20px;
+      border-bottom: 1px solid rgb(237 242 235 / 8%);
+      background: rgb(255 255 255 / 1.5%);
+    }
+    .feed-state-line { display: flex; align-items: center; gap: 9px; color: var(--muted); font: 10px var(--mono); letter-spacing: .08em; }
+    .feed-state-line strong { color: var(--cyan); font-weight: 500; }
+    .live-status { color: var(--muted); font: 10px var(--mono); text-align: right; }
+    #rotation-count { color: var(--cyan); }
+    .rotation-mode-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      border-bottom: 1px solid rgb(237 242 235 / 8%);
+    }
+    .mode-switch {
+      display: inline-flex;
+      padding: 2px;
+      border: 1px solid rgb(134 217 212 / 15%);
+      border-radius: 4px;
+      background: rgb(0 0 0 / 18%);
+    }
+    .mode-button, .step-button {
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 0;
+      border-radius: 3px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font: 9px var(--mono);
+      letter-spacing: .06em;
+    }
+    .mode-button[aria-pressed="true"] {
+      background: rgb(134 217 212 / 13%);
+      color: var(--cyan);
+    }
+    .manual-controls { display: flex; align-items: center; gap: 5px; }
+    .manual-controls[hidden] { display: none; }
+    .step-button {
+      border: 1px solid rgb(134 217 212 / 15%);
+      color: var(--ink);
+      letter-spacing: 0;
+    }
+    .step-button:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+    .step-button:disabled { cursor: not-allowed; opacity: .4; }
+    .mode-hint { margin: 0; color: var(--muted); font-size: 10px; }
+    .rotation-track { height: 2px; overflow: hidden; background: rgb(134 217 212 / 11%); }
+    .rotation-track[hidden] { display: none; }
+    .rotation-progress {
+      width: 100%;
+      height: 100%;
+      transform: scaleX(0);
+      transform-origin: left center;
+      background: linear-gradient(90deg, var(--cyan), var(--lime));
+    }
+    .rotation-progress.is-running { animation: rotation-progress 12s linear infinite; }
+    @keyframes rotation-progress { to { transform: scaleX(1); } }
+    .live-panel > .field-help { margin: 0; padding: 10px 20px 0; font-size: 10px; }
+    .dashboard-layout { display: block; padding: 0 20px 20px; }
+    .event-detail {
+      position: relative;
+      overflow: hidden;
+      min-height: 570px;
+      padding: 22px 4px 8px;
+      border: 0;
+      background: transparent;
+    }
+    .event-detail h3 { margin-bottom: 3px; color: var(--ink); font-size: 23px; letter-spacing: -.025em; }
+    .event-detail > p { margin-bottom: 0; }
+    .event-detail-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+    .event-detail-heading > p { margin: 0 0 3px; color: var(--muted); font: 10px var(--mono); text-align: right; }
+    .event-detail-heading .eyebrow { margin-bottom: 7px; font-size: 9px; }
+    .event-detail.is-transitioning { animation: object-arrive .45s ease both; }
+    @keyframes object-arrive {
+      from { opacity: .35; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .event-detail .curve-plot {
+      min-height: 310px;
+      max-height: 420px;
+      margin: 0;
+      border: 1px solid rgb(134 217 212 / 12%);
+      border-radius: 5px;
+      background:
+        radial-gradient(ellipse at 50% 50%, rgb(35 118 130 / 10%), transparent 68%),
+        linear-gradient(180deg, rgb(7 16 22 / 55%), rgb(19 37 43 / 42%));
+    }
+    .event-detail .result-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; }
+    .event-detail .result-stat { border-color: rgb(134 217 212 / 13%); background: rgb(134 217 212 / 3%); }
+    .event-detail .result-stat strong { color: var(--cyan); }
+    .event-detail h4 { margin-top: 15px; }
+    .event-detail .evidence-block { border-left-color: var(--cyan); background: rgb(134 217 212 / 4%); }
+    .dashboard-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 20px;
+      border-top: 1px solid rgb(237 242 235 / 8%);
+      color: var(--muted);
+      font: 9px var(--mono);
+    }
+    .dashboard-footer a { color: var(--cyan); text-decoration: none; }
+    .dashboard-footer a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 76px;
+      border-bottom: 1px solid rgb(237 242 235 / 10%);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 720;
+      letter-spacing: -.02em;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border: 1px solid rgb(197 242 119 / 45%);
+      border-radius: 50%;
+      color: var(--lime);
+      font: 14px var(--mono);
+    }
+
+    nav { display: flex; gap: 26px; }
+    nav a { color: var(--muted); font-size: 13px; text-decoration: none; }
+    nav a:hover { color: var(--ink); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      align-items: center;
+      gap: 68px;
+      padding-block: 92px 84px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 22px;
+      color: var(--cyan);
+      font: 11px var(--mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      width: 23px;
+      height: 1px;
+      background: currentColor;
+      content: "";
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      max-width: 700px;
+      margin-bottom: 22px;
+      font-size: clamp(42px, 6vw, 72px);
+      font-weight: 620;
+      letter-spacing: -.065em;
+      line-height: 1.04;
+    }
+
+    h1 span { color: var(--lime); }
+
+    .hero-copy {
+      max-width: 570px;
+      margin-bottom: 30px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+    .button {
+      display: inline-flex;
+      min-height: 46px;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 650;
+      text-decoration: none;
+    }
+
+    .button.primary {
+      border-color: var(--lime);
+      background: var(--lime);
+      color: #172018;
+    }
+
+    .button:hover { transform: translateY(-1px); }
+
+    button, input, textarea { font: inherit; }
+
+    .try-panel {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: linear-gradient(145deg, rgb(32 46 53 / 78%), rgb(20 31 37 / 88%));
+    }
+
+    .learn-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 14px;
+    }
+
+    .learn-card {
+      padding: 21px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgb(23 34 41 / 65%);
+    }
+
+    .learn-card h3 { margin: 11px 0 8px; font-size: 16px; }
+    .learn-card p { margin: 0; color: var(--muted); font-size: 13px; }
+    .learn-number { color: var(--cyan); font: 11px var(--mono); }
+
+    .sample-reading {
+      display: grid;
+      grid-template-columns: .8fr 1.2fr;
+      gap: 28px;
+      margin-top: 16px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgb(12 19 24 / 65%);
+    }
+
+    .sample-reading h3 { margin-bottom: 8px; font-size: 16px; }
+    .sample-reading p { margin: 0; color: var(--muted); font-size: 13px; }
+    .sample-reading table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .sample-reading th, .sample-reading td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+    .sample-reading th { color: var(--muted); font-size: 10px; font-weight: 550; }
+    .sample-reading td:nth-child(-n+3) { font-family: var(--mono); }
+    .sample-reading td:last-child { color: var(--muted); }
+
+    .learn-takeaway {
+      margin-top: 16px;
+      padding: 16px 19px;
+      border-left: 2px solid var(--lime);
+      background: rgb(197 242 119 / 5%);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .learn-takeaway strong { color: var(--lime); }
+
+    .runner-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .runner-field { display: grid; align-content: start; gap: 8px; }
+    .runner-field label, .field-label { color: var(--ink); font-size: 12px; font-weight: 650; }
+    .field-help { margin: 0; color: var(--muted); font-size: 11px; }
+
+    textarea, input[type="number"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #0c1318;
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 170px;
+      padding: 12px;
+      font: 11px/1.7 var(--mono);
+      resize: vertical;
+    }
+
+    input[type="number"] { padding: 9px 10px; }
+    input[type="file"] { max-width: 100%; color: var(--muted); font-size: 11px; }
+    input[type="file"]::file-selector-button {
+      margin-right: 10px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--surface-light);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .runner-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 10px; }
+
+    .runner-button {
+      min-height: 40px;
+      padding: 8px 13px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--surface-light);
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .runner-button.primary { border-color: var(--lime); background: var(--lime); color: #172018; }
+    .runner-button:hover { border-color: var(--lime); }
+    .runner-separator { margin: 24px 0; border: 0; border-top: 1px solid var(--line); }
+
+    .runner-results {
+      margin-top: 22px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: rgb(12 19 24 / 72%);
+    }
+
+    .runner-results h3 { margin-bottom: 12px; font-size: 15px; }
+    .result-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+    .result-stat { padding: 11px; border: 1px solid var(--line); border-radius: 4px; }
+    .result-stat span { display: block; color: var(--muted); font-size: 10px; }
+    .result-stat strong { display: block; margin-top: 5px; font: 13px var(--mono); overflow-wrap: anywhere; }
+    .score-explanation { margin: 15px 0 0; color: var(--muted); font-size: 12px; }
+    .score-explanation strong { color: var(--lime); }
+    .curve-plot { display: block; width: 100%; max-height: 280px; margin-top: 15px; }
+    .rank-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .rank-item { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 11px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+    .rank-item span:last-child { color: var(--lime); font-family: var(--mono); }
+
+    .classifier-region { margin-top: 11px; }
+    .event-detail .classifier-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 0 5px;
+      color: var(--muted);
+      font: 9px var(--mono);
+      letter-spacing: .1em;
+    }
+    .classifier-title span { color: var(--cyan); font-size: 8px; letter-spacing: .06em; }
+    .probability-models { border-top: 1px solid rgb(134 217 212 / 12%); }
+    .probability-model {
+      display: grid;
+      grid-template-columns: minmax(100px, .65fr) minmax(0, 2fr);
+      align-items: center;
+      gap: 10px;
+      padding: 5px 0;
+      border-bottom: 1px solid rgb(134 217 212 / 9%);
+    }
+    .probability-model-name {
+      overflow: hidden;
+      color: var(--muted);
+      font: 9px var(--mono);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .probability-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+    .probability-chip {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+      padding: 4px 6px;
+      border: 1px solid rgb(134 217 212 / 12%);
+      border-radius: 3px;
+      background: rgb(134 217 212 / 3%);
+      font-size: 9px;
+    }
+    .probability-class { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
+    .probability-value { flex: 0 0 auto; color: var(--lime); font: 9px var(--mono); }
+    .classifier-empty { margin: 0; color: var(--muted); font-size: 10px; }
+    .probability-guide { margin-top: 6px; border-top: 1px solid rgb(134 217 212 / 12%); }
+    .probability-guide summary { padding: 8px 0; color: var(--cyan); cursor: pointer; font-size: 10px; }
+    .probability-guide-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; padding-bottom: 8px; }
+    .probability-guide-content p { margin: 0; color: var(--muted); font-size: 10px; }
+    .signal-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+    .signal-grid .result-stat { padding: 8px; }
+    .signal-note { margin: 9px 0 0; color: var(--muted); font-size: 10px; }
+    .evidence-block { margin-top: 12px; padding: 12px; border-left: 2px solid var(--lime); background: rgb(197 242 119 / 5%); color: var(--muted); font-size: 11px; }
+    .evidence-block p:last-child { margin-bottom: 0; }
+    .runner-error {
+      margin-top: 16px;
+      padding: 11px 13px;
+      border-left: 2px solid var(--amber);
+      background: rgb(240 199 123 / 6%);
+      color: #f0d7a8;
+      font-size: 12px;
+    }
+
+    .evaluation-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .evaluation-output { margin-top: 15px; }
+    .evaluation-output table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .evaluation-output th, .evaluation-output td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; }
+    .evaluation-output th { color: var(--muted); font-weight: 550; }
+    .privacy-hint { margin: 14px 0 0; color: var(--muted); font-size: 11px; }
+
+    .plot-card {
+      position: relative;
+      overflow: hidden;
+      padding: 19px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: linear-gradient(145deg, rgb(32 46 53 / 92%), rgb(20 31 37 / 88%));
+      box-shadow: 0 24px 80px rgb(0 0 0 / 22%);
+    }
+
+    .plot-header {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font: 10px var(--mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .plot-status { color: var(--lime); }
+    .plot { display: block; width: 100%; margin-top: 20px; }
+    .plot-caption { margin: 16px 0 0; color: var(--muted); font-size: 12px; }
+
+    .score-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 17px;
+      padding-top: 15px;
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    .score-row span:first-child { color: var(--muted); }
+    .score-row strong { color: var(--lime); font: 13px var(--mono); }
+
+    section { padding-block: 76px; border-top: 1px solid rgb(237 242 235 / 10%); }
+
+    .section-heading {
+      display: grid;
+      grid-template-columns: .8fr 1.2fr;
+      align-items: start;
+      gap: 40px;
+      margin-bottom: 35px;
+    }
+
+    h2 {
+      margin-bottom: 0;
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 590;
+      letter-spacing: -.045em;
+      line-height: 1.15;
+    }
+
+    .section-intro { max-width: 620px; margin: 4px 0 0; color: var(--muted); }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .step {
+      min-height: 192px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgb(23 34 41 / 65%);
+    }
+
+    .step-number { color: var(--cyan); font: 12px var(--mono); }
+    .step h3 { margin: 22px 0 8px; font-size: 17px; font-weight: 630; }
+    .step p { margin-bottom: 0; color: var(--muted); font-size: 13px; }
+
+    .note {
+      display: flex;
+      gap: 13px;
+      margin-top: 18px;
+      padding: 16px 18px;
+      border-left: 2px solid var(--amber);
+      background: rgb(240 199 123 / 6%);
+      color: #d7d2c2;
+      font-size: 13px;
+    }
+
+    .note strong { color: var(--amber); }
+    .note p { margin: 0; }
+
+    .run-layout {
+      display: grid;
+      grid-template-columns: .8fr 1.2fr;
+      gap: 46px;
+    }
+
+    .run-copy { color: var(--muted); }
+    .run-copy h3 { color: var(--ink); font-size: 16px; }
+    .run-copy p { font-size: 14px; }
+
+    .terminal {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #0c1318;
+    }
+
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font: 10px var(--mono);
+    }
+
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #53636a; }
+    .terminal-title { margin-left: 6px; }
+
+    pre {
+      overflow-x: auto;
+      margin: 0;
+      padding: 19px 20px 21px;
+      color: #d7e1da;
+      font-size: 12px;
+      line-height: 1.9;
+      tab-size: 2;
+    }
+
+    .prompt { color: var(--lime); }
+    .comment { color: #809092; }
+
+    .schema {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 22px;
+    }
+
+    .schema-card {
+      padding: 19px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgb(23 34 41 / 55%);
+    }
+
+    .schema-card h3 { margin-bottom: 9px; font-size: 14px; }
+    .schema-card p { margin-bottom: 0; color: var(--muted); font-size: 12px; }
+
+    .limits {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 34px;
+    }
+
+    .limit-card {
+      padding: 23px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .limit-card h3 { margin-bottom: 11px; font-size: 16px; }
+    .limit-card p { margin-bottom: 0; color: var(--muted); font-size: 13px; }
+    .limit-card.caution { border-color: rgb(240 199 123 / 40%); }
+    .limit-card.caution h3 { color: var(--amber); }
+
+    details {
+      margin-top: 20px;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    summary {
+      padding: 16px 0;
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 620;
+    }
+
+    details p { max-width: 850px; color: var(--muted); font-size: 13px; }
+    details code { color: var(--cyan); }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding-block: 25px 35px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    footer a { text-decoration-color: var(--line); text-underline-offset: 3px; }
+
+    @media (max-width: 760px) {
+      .hero { grid-template-columns: 1fr; gap: 38px; padding-block: 65px; }
+      .section-heading, .run-layout { grid-template-columns: 1fr; gap: 17px; }
+      .runner-grid, .sample-reading { grid-template-columns: 1fr; gap: 20px; }
+      #dashboard { min-height: auto; padding-block: 30px 48px; }
+      .dashboard-heading { align-items: start; flex-direction: column; }
+      .event-detail { min-height: 0; }
+      .event-detail-heading { align-items: start; flex-direction: column; }
+      .event-detail-heading > p { text-align: left; }
+      .learn-grid { grid-template-columns: 1fr; }
+      .probability-guide-content { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr; }
+      .step { min-height: auto; }
+      .step h3 { margin-top: 13px; }
+      .limits { grid-template-columns: 1fr; gap: 14px; }
+    }
+
+    @media (max-width: 480px) {
+      .wrap { width: min(100% - 32px, 1120px); }
+      .topbar { min-height: 64px; }
+      nav { gap: 14px; }
+      nav a { font-size: 11px; }
+      .schema { grid-template-columns: 1fr; }
+      .try-panel { padding: 16px; }
+      .live-panel { padding: 0; }
+      .live-toolbar, .dashboard-footer { align-items: flex-start; flex-direction: column; }
+      .live-status { text-align: left; }
+      .rotation-mode-row { flex-wrap: wrap; padding-inline: 14px; }
+      .mode-hint { width: 100%; }
+      .dashboard-layout { padding-inline: 14px; }
+      .live-panel > .field-help { padding-inline: 14px; }
+      .event-detail { padding-top: 17px; }
+      .event-detail .curve-plot { min-height: 240px; }
+      .event-detail .result-grid { grid-template-columns: 1fr 1fr; }
+      .probability-model { grid-template-columns: 1fr; gap: 4px; }
+      .sample-reading { padding: 16px; }
+      .sample-reading table { display: block; overflow-x: auto; white-space: nowrap; }
+      .result-grid { grid-template-columns: 1fr 1fr; }
+      section { padding-block: 56px; }
+      footer { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; }
+      .event-detail.is-transitioning { animation: none; }
+      .rotation-progress.is-running { animation: none; transform: scaleX(.35); }
+    }
+  </style>
+</head>
+<body>
+  <header class="wrap topbar">
+    <a class="brand" href="#top" aria-label="Lightcurve project home">
+      <span class="brand-mark" aria-hidden="true">lc</span>
+      <span>Lightcurve <span style="color: var(--muted); font-weight: 450;">/ research prototype</span></span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="#dashboard">Live feed</a>
+      <a href="#try-it">Try it</a>
+      <a href="#learn">Learn</a>
+      <a href="#method">How it works</a>
+      <a href="#limits">Limitations</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section id="dashboard" aria-labelledby="dashboard-title">
+      <div class="wrap">
+        <div class="dashboard-heading">
+          <div>
+            <p class="eyebrow">ALeRCE / ZTF · public transient survey</p>
+            <h1 id="dashboard-title">Live sky<span> /</span> object watch</h1>
+          </div>
+          <p>A rotating view of recent ZTF sources. Light curves appear as soon as photometry is available.</p>
+          <div class="feed-chip"><span class="live-indicator" aria-hidden="true"></span> DATA LINK <span id="feed-state">CONNECTING</span></div>
+        </div>
+        <div class="try-panel live-panel">
+          <div class="live-toolbar">
+            <span class="feed-state-line"><span class="live-indicator" aria-hidden="true"></span> <span id="rotation-label">AUTO SCAN · NEXT SOURCE IN 12 SEC</span> <span id="rotation-count">-- / --</span></span>
+            <span class="live-status" id="dashboard-status" role="status" aria-live="polite">Connecting to ALeRCE…</span>
+          </div>
+          <div class="rotation-mode-row">
+            <div class="mode-switch" role="group" aria-label="Source browsing mode">
+              <button class="mode-button" id="auto-mode" type="button" data-navigation-mode="auto" aria-pressed="true">AUTO</button>
+              <button class="mode-button" id="manual-mode" type="button" data-navigation-mode="manual" aria-pressed="false">MANUAL</button>
+            </div>
+            <div class="manual-controls" id="manual-controls" hidden>
+              <button class="step-button" id="previous-object" type="button" aria-label="Previous source">← Previous</button>
+              <button class="step-button" id="next-object" type="button" aria-label="Next source">Next →</button>
+            </div>
+            <p class="mode-hint" id="mode-hint">Automatically advances every 12 seconds</p>
+          </div>
+          <div class="rotation-track" id="rotation-track" aria-hidden="true">
+            <div class="rotation-progress is-running" id="rotation-progress"></div>
+          </div>
+          <p class="field-help">Objects are filtered to at least five detections; curves are checked for distinct observing times before plotting. ALeRCE data updates are not guaranteed real time.</p>
+          <div id="dashboard-error" class="runner-error" role="alert" hidden></div>
+          <div class="dashboard-layout">
+            <article class="event-detail" id="event-detail" aria-live="polite" aria-atomic="true">
+              <p>Previously viewed curves appear instantly while fresh ALeRCE data loads in the background.</p>
+            </article>
+          </div>
+          <div class="dashboard-footer">
+            <span>ALeRCE ZTF · public survey data · auto-rotating sources</span>
+            <span>
+              <a href="https://alerce.readthedocs.io/en/latest/tutorials/ztf_api.html" target="_blank" rel="noreferrer">API documentation</a>
+              &nbsp;·&nbsp;
+              <a href="https://api.alerce.online/ztf/v1/objects" target="_blank" rel="noreferrer">Data source</a>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="wrap hero">
+      <div>
+        <p class="eyebrow">A small astronomy prototype</p>
+        <h1>Curious about a star's <span>changing light?</span></h1>
+        <p class="hero-copy">
+          Don't know anything about light curves? I can make it easier.
+          Paste in a few observations and see what this simple prototype can tell you.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="#try-it">Try it in your browser <span aria-hidden="true">&nbsp;↗</span></a>
+          <a class="button" href="#learn">Learn about light curves</a>
+        </div>
+      </div>
+
+      <div class="plot-card" aria-label="Illustration of a sample light curve and its heuristic score">
+        <div class="plot-header">
+          <span>Example light curve · g band</span>
+          <span class="plot-status">Illustrative</span>
+        </div>
+        <svg class="plot" viewBox="0 0 440 220" role="img" aria-labelledby="plot-title plot-desc">
+          <title id="plot-title">Illustrative rise and decline in a light curve</title>
+          <desc id="plot-desc">Seven observations brighten toward a peak and then fade. The magnitude axis is inverted, as is common for astronomical magnitudes.</desc>
+          <g stroke="#33434a" stroke-width="1">
+            <path d="M48 22H420M48 62H420M48 102H420M48 142H420M48 182H420"/>
+            <path d="M48 22V182M141 22V182M234 22V182M327 22V182M420 22V182"/>
+          </g>
+          <g fill="#a7b2b1" font-family="monospace" font-size="9">
+            <text x="10" y="26">18.0</text>
+            <text x="10" y="66">18.5</text>
+            <text x="10" y="106">19.0</text>
+            <text x="10" y="146">19.5</text>
+            <text x="10" y="186">20.0</text>
+            <text x="48" y="205">60000</text>
+            <text x="355" y="205">MJD</text>
+            <text x="4" y="12">mag</text>
+          </g>
+          <path d="M58 166L112 104L166 72L220 46L274 70L328 110L382 158"
+            fill="none" stroke="#c5f277" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <g fill="#101820" stroke="#c5f277" stroke-width="2">
+            <circle cx="58" cy="166" r="4"/><circle cx="112" cy="104" r="4"/>
+            <circle cx="166" cy="72" r="4"/><circle cx="220" cy="46" r="4"/>
+            <circle cx="274" cy="70" r="4"/><circle cx="328" cy="110" r="4"/>
+            <circle cx="382" cy="158" r="4"/>
+          </g>
+          <path d="M58 167L220 48" fill="none" stroke="#86d9d4" stroke-dasharray="4 5" opacity=".8"/>
+          <path d="M220 48L382 157" fill="none" stroke="#86d9d4" stroke-dasharray="4 5" opacity=".8"/>
+        </svg>
+        <p class="plot-caption">A shape to inspect, not a classification.</p>
+        <div class="score-row"><span>Shape heuristic score</span><strong>100 / 100</strong></div>
+      </div>
+    </div>
+
+    <section id="learn">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Start here / No astronomy background needed</p>
+            <h2>Light curves,<br>in plain English.</h2>
+          </div>
+          <p class="section-intro">
+            Imagine checking the same star again and again and writing down how
+            bright it looks each time. Put those notes in date order and you have
+            a light curve: a simple picture of brightness changing over time.
+          </p>
+        </div>
+
+        <div class="learn-grid">
+          <article class="learn-card">
+            <span class="learn-number">THE WHEN</span>
+            <h3>MJD = Modified Julian Date</h3>
+            <p>It is a count of days from a shared starting point: November 17, 1858. One more MJD means one day later, so 60001 comes a day after 60000. Decimals show part of a day. You can use the numbers as-is; you do not need to convert them to calendar dates.</p>
+          </article>
+          <article class="learn-card">
+            <span class="learn-number">THE WHERE</span>
+            <h3>Band = color filter</h3>
+            <p>A band tells you which part of the light the telescope measured. For example, <code>g</code> and <code>r</code> are different filters. This tool looks at the best-sampled band for its shape check.</p>
+          </article>
+          <article class="learn-card">
+            <span class="learn-number">THE HOW BRIGHT</span>
+            <h3>Magnitude runs backwards</h3>
+            <p>Smaller magnitude numbers mean brighter light. So a change from 20 to 18 means the object got brighter; a change from 18 to 19 means it got fainter.</p>
+          </article>
+          <article class="learn-card probability-lesson">
+            <span class="learn-number">THE MODEL'S ESTIMATE</span>
+            <h3>A probability is a clue, not a verdict</h3>
+            <p>A “class” is a label, such as supernova. If a model gives that class 80%, it means the model assigned it a score of 0.80—not that the object is confirmed or that we know there is an 8-in-10 chance. That chance interpretation requires testing and calibration on similar examples; this page does not verify either.</p>
+          </article>
+        </div>
+
+        <div class="learn-takeaway">
+          <strong>Why models may disagree:</strong> a light-curve model looks at how brightness changes over time, while an image-stamp model looks at a small telescope image. They use different clues, so compare scores within one model—not across models. A disagreement is a reason to inspect the evidence, not to pick a winner.
+        </div>
+
+        <div class="sample-reading">
+          <div>
+            <h3>How to read the sample data</h3>
+            <p>Each row is one telescope observation: when it was made, which filter was used, and the measured brightness. The sample is made-up demo data so you can safely try the tool.</p>
+          </div>
+          <table>
+            <thead>
+              <tr><th>MJD (when)</th><th>Band</th><th>Magnitude</th><th>In everyday words</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>60000</td><td>g</td><td>20.0</td><td>Starting point; relatively faint</td></tr>
+              <tr><td>60003</td><td>g</td><td>18.0</td><td>Brightest sample so far</td></tr>
+              <tr><td>60006</td><td>g</td><td>19.4</td><td>Fainter again</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="learn-takeaway">
+          <strong>What this project does:</strong> it counts observations, shows the time span, filters, typical brightness and brightness range, then checks for a “got brighter, reached a peak, got fainter” pattern. When there are enough observations, it gives 50 points for each trend it finds: 100 means both, 50 means one, and 0 means neither. This is only a rough sorting aid—not a probability or a discovery claim.
+        </div>
+      </div>
+    </section>
+
+    <section id="try-it">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Try it / In your browser</p>
+            <h2>Bring a CSV.<br>Get a quick read.</h2>
+          </div>
+          <p class="section-intro">
+            Paste observations or choose a CSV file. The page calculates the
+            summary and shape score right here—no Python setup and no upload to a server.
+          </p>
+        </div>
+        <div class="try-panel">
+          <div class="runner-grid">
+            <div class="runner-field">
+              <label for="curve-csv">Paste CSV observations</label>
+              <p class="field-help">Required headings: <code>mjd,band,mag</code>. One observation per row.</p>
+              <textarea id="curve-csv" spellcheck="false" aria-describedby="curve-help">mjd,band,mag
+60000,g,20.0
+60001,g,19.2
+60002,g,18.5
+60003,g,18.0
+60004,g,18.3
+60005,g,18.8
+60006,g,19.4</textarea>
+              <div class="runner-actions">
+                <button class="runner-button primary" id="analyze-button" type="button">Analyze light curve</button>
+                <button class="runner-button" id="sample-button" type="button">Load sample</button>
+              </div>
+            </div>
+            <div class="runner-field">
+              <label for="curve-file">Or choose a CSV file</label>
+              <p class="field-help" id="curve-help">Your file stays in this browser; its contents are not sent anywhere.</p>
+              <input id="curve-file" type="file" accept=".csv,text/csv">
+              <div id="analysis-error" class="runner-error" role="alert" hidden></div>
+              <div id="analysis-results" class="runner-results" aria-live="polite" hidden>
+                <h3 id="analysis-title">Light-curve summary</h3>
+                <div class="result-grid" id="summary-stats"></div>
+                <p class="score-explanation" id="shape-explanation"></p>
+                <svg class="curve-plot" id="curve-plot" role="img"></svg>
+              </div>
+            </div>
+          </div>
+
+          <hr class="runner-separator">
+
+          <div class="runner-grid">
+            <div class="runner-field">
+              <label for="rank-files">Compare several light curves</label>
+              <p class="field-help">Select multiple CSV files. Each needs <code>mjd,band,mag</code> headings.</p>
+              <input id="rank-files" type="file" accept=".csv,text/csv" multiple>
+              <div class="runner-actions">
+                <button class="runner-button primary" id="rank-button" type="button">Rank selected curves</button>
+              </div>
+            </div>
+            <div>
+              <div id="rank-error" class="runner-error" role="alert" hidden></div>
+              <div id="rank-results" class="runner-results" aria-live="polite" hidden>
+                <h3>Shape-score ranking</h3>
+                <ol class="rank-list" id="rank-list"></ol>
+              </div>
+            </div>
+          </div>
+
+          <details style="margin-top: 24px;">
+            <summary>Have labeled candidates? Compare rankings</summary>
+            <p class="field-help">Paste an evaluation CSV with <code>candidate_id,discovery_mjd,is_supernova,shape_score,broker_anomaly_score</code> columns.</p>
+            <div class="runner-grid" style="margin-top: 12px;">
+              <div class="runner-field">
+                <label for="evaluation-csv">Evaluation CSV</label>
+                <textarea id="evaluation-csv" spellcheck="false" placeholder="candidate_id,discovery_mjd,is_supernova,shape_score,broker_anomaly_score"></textarea>
+                <input id="evaluation-file" type="file" accept=".csv,text/csv">
+                <div class="evaluation-fields">
+                  <div class="runner-field">
+                    <label for="test-fraction">Latest fraction to hold out</label>
+                    <input id="test-fraction" type="number" min="0.01" max="0.99" step="0.05" value="0.3">
+                  </div>
+                  <div class="runner-field">
+                    <label for="precision-at">Precision at K</label>
+                    <input id="precision-at" type="number" min="1" step="1" value="5">
+                  </div>
+                </div>
+                <div class="runner-actions">
+                  <button class="runner-button primary" id="evaluate-button" type="button">Evaluate rankings</button>
+                </div>
+              </div>
+              <div>
+                <div id="evaluation-error" class="runner-error" role="alert" hidden></div>
+                <div id="evaluation-results" class="runner-results evaluation-output" aria-live="polite" hidden></div>
+              </div>
+            </div>
+            <p class="privacy-hint">Only use real labels and scores if they were independently prepared and use information available at the time of each candidate’s decision. Synthetic example metrics are not scientific evidence.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section id="method">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 / The workflow</p>
+            <h2>Three steps.<br>Visible reasoning.</h2>
+          </div>
+          <p class="section-intro">
+            The dashboard reads recent ZTF objects and photometry from ALeRCE.
+            For each selected object it separates broker classifier outputs,
+            simple shape checks, and additional variability diagnostics.
+          </p>
+        </div>
+        <div class="steps">
+          <article class="step">
+            <span class="step-number">STEP 01</span>
+            <h3>Load recent objects</h3>
+            <p>Poll ALeRCE's public ZTF database for objects ordered by their most recent observation.</p>
+          </article>
+          <article class="step">
+            <span class="step-number">STEP 02</span>
+            <h3>Inspect each curve</h3>
+            <p>Plot detections and show any class probabilities returned by ALeRCE's machine-learning classifiers.</p>
+          </article>
+          <article class="step">
+            <span class="step-number">STEP 03</span>
+            <h3>Compare signals</h3>
+            <p>Check the rise-and-fade heuristic alongside robust variability, the largest adjacent change, and sampling gaps.</p>
+          </article>
+          <article class="step">
+            <span class="step-number">STEP 04</span>
+            <h3>Review hypotheses</h3>
+            <p>Read a cautious evidence summary and inspect images, catalogs, and follow-up data before drawing a conclusion.</p>
+          </article>
+        </div>
+        <div class="note">
+          <strong>Important</strong>
+          <p>ALeRCE classifier probabilities are model outputs, not confirmed labels. The local shape score is 0, 50, or 100—not a probability—and is withheld when there are too few observations around a peak.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="run">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">02 / Get started</p>
+            <h2>Prefer the command line?</h2>
+          </div>
+          <p class="section-intro">
+            Python 3 is all you need for the prototype: it uses the standard
+            library. Run these commands from the repository root.
+          </p>
+        </div>
+        <div class="run-layout">
+          <div class="run-copy">
+            <h3>Start with the included example</h3>
+            <p>The demo files are synthetic examples for exercising the pipeline. The commands print their results as JSON in your terminal.</p>
+            <p>Run <code>pytest -q</code> to check the project. To view this project overview on your computer, use <code>python -m http.server 8000 --directory web</code>, then open <code>http://localhost:8000</code>.</p>
+          </div>
+          <div class="terminal" aria-label="Example commands to run the prototype">
+            <div class="terminal-bar">
+              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              <span class="terminal-title">repository root · terminal</span>
+            </div>
+            <pre><span class="comment"># Summarize a light curve</span>
+<span class="prompt">$</span> python prototype/lightcurve_summary.py demo/light_curve.csv
+
+<span class="comment"># Rank example curves by shape</span>
+<span class="prompt">$</span> python prototype/lightcurve_summary.py --rank-supernova-shape \
+    demo/light_curve.csv demo/supernova_shape_example.csv
+
+<span class="comment"># Evaluate rankings on a chronological holdout</span>
+<span class="prompt">$</span> python prototype/lightcurve_summary.py --evaluate-rankings \
+    demo/evaluation_example.csv --test-fraction 0.3 --precision-at 5
+
+<span class="comment"># Run tests</span>
+<span class="prompt">$</span> pytest -q</pre>
+          </div>
+        </div>
+        <div class="schema">
+          <div class="schema-card">
+            <h3>Light-curve CSV</h3>
+            <p>Required columns: <code>mjd</code>, <code>band</code>, <code>mag</code>.</p>
+          </div>
+          <div class="schema-card">
+            <h3>Evaluation CSV</h3>
+            <p>Required columns: <code>candidate_id</code>, <code>discovery_mjd</code>, <code>is_supernova</code>, <code>shape_score</code>, <code>broker_anomaly_score</code>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="limits">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">03 / Scope &amp; limitations</p>
+            <h2>A starting point,<br>not a finding.</h2>
+          </div>
+          <p class="section-intro">
+            This is a working prototype for feedback and pipeline testing. Results
+            need careful validation before they can support scientific conclusions.
+          </p>
+        </div>
+        <div class="limits">
+          <article class="limit-card">
+            <h3>What it is</h3>
+            <p>A read-only view of ALeRCE's public ZTF objects, detections, and available classifier probabilities, plus local deterministic light-curve diagnostics. Its evidence summary is template-based, not generated by a language model.</p>
+          </article>
+          <article class="limit-card caution">
+            <h3>What it is not</h3>
+            <p>The local shape and variability checks are not trained or calibrated, and classifier output is not a scientific confirmation. The bundled examples and their metrics are synthetic, so they are not evidence of real-world performance.</p>
+          </article>
+        </div>
+        <details>
+          <summary>What would be needed for a meaningful evaluation?</summary>
+          <p>A real sample with independently matched labels, plus scores computed only from information available at each candidate’s decision time to avoid data leakage. The broker anomaly score is only an exploratory comparator, not a validated supernova baseline.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    <span>Lightcurve ranking prototype · 1066-final</span>
+    <a href="#try-it">Try the browser tool</a>
+  </footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
